@@ -4,9 +4,11 @@ import random
 import string
 from datetime import datetime, timedelta
 from langchain_openai import ChatOpenAI
+from os import getenv
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.tools import tool
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent  # here we are using the new agent instead of the old react agent
+# from langgraph.prebuilt import create_react_agent     # this is deprecated and not used in the new agent
 
 from dotenv import load_dotenv
 
@@ -98,7 +100,13 @@ def generate_sample_users(
 
 TOOLS = [write_json, read_json, generate_sample_users]
 
-llm = ChatOpenAI(model="gpt-4", temperature=0)
+# llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+
+llm = ChatOpenAI(
+  api_key=getenv("OPENROUTER_API_KEY"),
+  base_url="https://openrouter.ai/api/v1",
+  model="google/gemini-2.5-flash"
+)
 
 SYSTEM_MESSAGE = (
     "You are DataGen, a helpful assistant that generates sample data for applications. "
@@ -108,7 +116,7 @@ SYSTEM_MESSAGE = (
     "If the user refers to 'those users' from a previous request, ask them to specify the details again."
 )
 
-agent = create_react_agent(llm, TOOLS, prompt=SYSTEM_MESSAGE)
+agent = create_agent(llm, TOOLS, system_prompt=SYSTEM_MESSAGE)
 
 
 def run_agent(user_input: str, history: List[BaseMessage]) -> AIMessage:
@@ -119,10 +127,22 @@ def run_agent(user_input: str, history: List[BaseMessage]) -> AIMessage:
             config={"recursion_limit": 50}
         )
         # Return the last AI message
+        # print("=" * 60)
+        # print("Result:")
+        # print(result)
+        # print("=" * 60)
         return result["messages"][-1]
     except Exception as e:
         # Return error as an AI message so the conversation can continue
         return AIMessage(content=f"Error: {str(e)}\n\nPlease try rephrasing your request or provide more specific details.")
+
+# a = HumanMessage(content="create 2 users")
+# b = AIMessage(content="I have created 2 users as you mentioned and do you want to save them?")
+# c = "save them to users.json file"
+
+# history = [a, b]
+# response = run_agent(c, history)
+# print(response.content)
 
 
 if __name__ == "__main__":
@@ -156,3 +176,4 @@ if __name__ == "__main__":
 
         # Update conversation history
         history += [HumanMessage(content=user_input), response]
+        # here i am only saving the human message and ai message in the history. not storing the tool calls in the history so that i have less tokens in the history.
